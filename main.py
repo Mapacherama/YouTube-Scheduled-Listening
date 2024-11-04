@@ -8,23 +8,20 @@ from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
 load_dotenv()
 
 app = FastAPI()
 
-# Configure logging
 logging.basicConfig(level=logging.INFO)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Adjust this if you have specific domains
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],  # Adjust if you want to restrict to POST, GET, etc.
-    allow_headers=["*"],  # You may specify particular headers if needed
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# Define scopes and load client secrets directly from environment variables
 SCOPES = ["https://www.googleapis.com/auth/youtube.readonly"]
 CLIENT_SECRETS_INFO = {
     "installed": {
@@ -37,7 +34,6 @@ CLIENT_SECRETS_INFO = {
         "redirect_uris": [os.getenv("REDIRECT_URIS")]
     }
 }
-# Same token storage functions as before
 
 @app.get("/login")
 def login():
