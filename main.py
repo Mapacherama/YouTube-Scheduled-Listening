@@ -49,8 +49,10 @@ async def callback(request: Request):
         scopes=SCOPES,
         redirect_uri=os.getenv("REDIRECT_URIS")
     )
+    
     flow.fetch_token(code=code)
     credentials = flow.credentials
+    
     token_info = {
         "token": credentials.token,
         "refresh_token": credentials.refresh_token,
@@ -58,10 +60,12 @@ async def callback(request: Request):
         "client_id": credentials.client_id,
         "client_secret": credentials.client_secret,
         "scopes": credentials.scopes,
-        "expires_at": (datetime.now() + timedelta(seconds=credentials.expiry)).isoformat()  # Adjust as needed
+        "expires_at": (datetime.now() + timedelta(seconds=credentials.expiry)).isoformat()
     }
+    
     save_token_info(token_info)
     logging.info("Authentication successful and token info saved")
+    
     return {"message": "Authentication successful"}
 
 @app.get("/get-playlist-videos")
