@@ -37,7 +37,6 @@ CLIENT_SECRETS_INFO = {
         "redirect_uris": [os.getenv("REDIRECT_URIS")]
     }
 }
-
 # Same token storage functions as before
 
 @app.get("/login")
