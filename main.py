@@ -1,26 +1,17 @@
 import os
 import logging
 from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import RedirectResponse
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow as Flow
 from googleapiclient.discovery import build
-from fastapi.responses import RedirectResponse
-from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
+from datetime import datetime, timedelta
 
-load_dotenv()
+from token_management import save_token_info, load_token_info, is_token_valid
 
 app = FastAPI()
 
 logging.basicConfig(level=logging.INFO)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 SCOPES = ["https://www.googleapis.com/auth/youtube.readonly"]
 CLIENT_SECRETS_INFO = {
@@ -66,7 +57,8 @@ async def callback(request: Request):
         "token_uri": credentials.token_uri,
         "client_id": credentials.client_id,
         "client_secret": credentials.client_secret,
-        "scopes": credentials.scopes
+        "scopes": credentials.scopes,
+        "expires_at": (datetime.now() + timedelta(seconds=credentials.expiry)).isoformat()  # Adjust as needed
     }
     save_token_info(token_info)
     logging.info("Authentication successful and token info saved")
@@ -79,13 +71,25 @@ def get_playlist_videos(playlist_id: str):
         logging.warning("No token info available, authentication required")
         raise HTTPException(status_code=401, detail="Authentication required")
 
+    if not is_token_valid(token_info):
+        logging.warning("Token is expired, re-authentication required")
+        raise HTTPException(status_code=401, detail="Token expired, please re-authenticate")
+
     credentials = Credentials(**token_info)
     youtube = build("youtube", "v3", credentials=credentials)
-    request = youtube.playlistItems().list(
-        part="snippet",
-        playlistId=playlist_id,
-        maxResults=10
-    )
-    response = request.execute()
-    logging.info("Retrieved playlist videos successfully")
-    return response
+
+    try:
+        request = youtube.playlistItems().list(
+            part="snippet",
+            playlistId=playlist_id,
+            maxResults=10
+        )
+        response = request.execute()
+        logging.info("Retrieved playlist videos successfully")
+        return {
+            "videos": response.get("items", []),
+            "totalResults": response.get("pageInfo", {}).get("totalResults", 0)
+        }
+    except Exception as e:
+        logging.error(f"Error retrieving playlist videos: {e}")
+        raise HTTPException(status_code=500, detail="Error retrieving playlist videos")
