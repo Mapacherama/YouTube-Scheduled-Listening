@@ -73,27 +73,16 @@ def get_playlist_videos(playlist_id: str):
     token_info = load_token_info()
     token_info = refresh_access_token(token_info)
     
-    logging.info(f"Token info: {token_info}")
-
-    if not token_info:
-        logging.warning("No token info available, authentication required")
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    if not is_token_valid(token_info):
-        logging.warning("Token is expired, re-authentication required")
-        raise HTTPException(status_code=401, detail="Token expired, please re-authenticate")
-
-    credentials = Credentials(**token_info)
-    youtube = build("youtube", "v3", credentials=credentials)
-
     try:
+        credentials = Credentials(**token_info)
+        youtube = build("youtube", "v3", credentials=credentials)
+
         request = youtube.playlistItems().list(
             part="snippet",
             playlistId=playlist_id,
             maxResults=10
         )
         response = request.execute()
-        logging.info("Retrieved playlist videos successfully")
         return {
             "videos": response.get("items", []),
             "totalResults": response.get("pageInfo", {}).get("totalResults", 0)
