@@ -99,3 +99,6 @@ celerybeat.pid
 
 # History directory
 .history/
+
+# Token info
+token_info.json

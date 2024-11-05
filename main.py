@@ -60,7 +60,7 @@ async def callback(request: Request):
         "client_id": credentials.client_id,
         "client_secret": credentials.client_secret,
         "scopes": credentials.scopes,
-        "expires_at": (datetime.now() + timedelta(seconds=credentials.expiry)).isoformat()
+        "expires_at": credentials.expiry.isoformat()
     }
     
     save_token_info(token_info)
@@ -71,6 +71,10 @@ async def callback(request: Request):
 @app.get("/get-playlist-videos")
 def get_playlist_videos(playlist_id: str):
     token_info = load_token_info()
+    token_info = refresh_access_token(token_info)
+    
+    logging.info(f"Token info: {token_info}")
+
     if not token_info:
         logging.warning("No token info available, authentication required")
         raise HTTPException(status_code=401, detail="Authentication required")
@@ -97,3 +101,20 @@ def get_playlist_videos(playlist_id: str):
     except Exception as e:
         logging.error(f"Error retrieving playlist videos: {e}")
         raise HTTPException(status_code=500, detail="Error retrieving playlist videos")
+
+def refresh_access_token(token_info):
+    credentials = Credentials(**token_info)
+    if credentials.expired and credentials.refresh_token:
+        credentials.refresh(Request())
+        new_token_info = {
+            "token": credentials.token,
+            "refresh_token": credentials.refresh_token,
+            "token_uri": credentials.token_uri,
+            "client_id": credentials.client_id,
+            "client_secret": credentials.client_secret,
+            "scopes": credentials.scopes,
+            "expires_at": credentials.expiry.isoformat()
+        }
+        save_token_info(new_token_info)  
+        return new_token_info
+    return token_info
