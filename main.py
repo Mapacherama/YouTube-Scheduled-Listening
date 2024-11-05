@@ -3,6 +3,7 @@ import logging
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import RedirectResponse
 from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow as Flow
 from googleapiclient.discovery import build
 from datetime import datetime, timedelta
@@ -71,6 +72,10 @@ async def callback(request: Request):
 @app.get("/get-playlist-videos")
 def get_playlist_videos(playlist_id: str):
     token_info = load_token_info()
+    if token_info is None:
+        logging.warning("No token info available, authentication required")
+        raise HTTPException(status_code=401, detail="Authentication required")
+
     token_info = refresh_access_token(token_info)
     
     try:
@@ -104,6 +109,6 @@ def refresh_access_token(token_info):
             "scopes": credentials.scopes,
             "expires_at": credentials.expiry.isoformat()
         }
-        save_token_info(new_token_info)  
+        save_token_info(new_token_info)
         return new_token_info
     return token_info
