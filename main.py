@@ -3,10 +3,11 @@ import logging
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import RedirectResponse
 from google.oauth2.credentials import Credentials
-from google.auth.transport.requests import Request
+from google.auth.transport.requests import Request as GoogleRequest
 from google_auth_oauthlib.flow import InstalledAppFlow as Flow
 from googleapiclient.discovery import build
 from datetime import datetime, timedelta
+from pydantic import BaseModel
 
 from token_management import save_token_info, load_token_info, is_token_valid
 
@@ -27,6 +28,9 @@ CLIENT_SECRETS_INFO = {
     }
 }
 
+class CallbackResponse(BaseModel):
+    message: str
+
 @app.get("/login")
 def login():
     flow = Flow.from_client_config(
@@ -38,7 +42,7 @@ def login():
     logging.info(f"Generated authentication URL: {auth_url}")
     return RedirectResponse(auth_url)
 
-@app.get("/callback", response_model=None)
+@app.get("/callback", response_model=CallbackResponse)
 async def callback(request: Request):
     code = request.query_params.get("code")
     if not code:
@@ -67,13 +71,13 @@ async def callback(request: Request):
     save_token_info(token_info)
     logging.info("Authentication successful and token info saved")
     
-    return {"message": "Authentication successful"}
+    return CallbackResponse(message="Authentication successful")
 
 @app.get("/get-playlist-videos")
 def get_playlist_videos(playlist_id: str):
     token_info = load_token_info()
-    if token_info is None:
-        logging.warning("No token info available, authentication required")
+    if token_info is None or not is_token_valid(token_info):
+        logging.warning("No valid token info available, authentication required")
         raise HTTPException(status_code=401, detail="Authentication required")
 
     token_info = refresh_access_token(token_info)
@@ -88,6 +92,11 @@ def get_playlist_videos(playlist_id: str):
             maxResults=10
         )
         response = request.execute()
+        
+        if "error" in response:
+            logging.error(f"API error: {response['error']}")
+            raise HTTPException(status_code=response['error'].get('code', 500), detail=response['error'].get('message', 'Error retrieving playlist videos'))
+
         return {
             "videos": response.get("items", []),
             "totalResults": response.get("pageInfo", {}).get("totalResults", 0)
@@ -99,7 +108,7 @@ def get_playlist_videos(playlist_id: str):
 def refresh_access_token(token_info):
     credentials = Credentials(**token_info)
     if credentials.expired and credentials.refresh_token:
-        credentials.refresh(Request())
+        credentials.refresh(GoogleRequest())
         new_token_info = {
             "token": credentials.token,
             "refresh_token": credentials.refresh_token,
