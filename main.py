@@ -38,7 +38,7 @@ def login():
     logging.info(f"Generated authentication URL: {auth_url}")
     return RedirectResponse(auth_url)
 
-@app.get("/callback")
+@app.get("/callback", response_model=None)
 async def callback(request: Request):
     code = request.query_params.get("code")
     if not code:
@@ -61,7 +61,7 @@ async def callback(request: Request):
         "client_id": credentials.client_id,
         "client_secret": credentials.client_secret,
         "scopes": credentials.scopes,
-        "expires_at": credentials.expiry.isoformat()
+        "expires_at": (datetime.utcnow() + timedelta(days=1)).isoformat()
     }
     
     save_token_info(token_info)
@@ -107,7 +107,7 @@ def refresh_access_token(token_info):
             "client_id": credentials.client_id,
             "client_secret": credentials.client_secret,
             "scopes": credentials.scopes,
-            "expires_at": credentials.expiry.isoformat()
+            "expires_at": (datetime.utcnow() + timedelta(days=1)).isoformat()
         }
         save_token_info(new_token_info)
         return new_token_info
