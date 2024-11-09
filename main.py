@@ -6,10 +6,12 @@ from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request as GoogleRequest
 from google_auth_oauthlib.flow import InstalledAppFlow as Flow
 from googleapiclient.discovery import build
-from datetime import datetime, timedelta
 from pydantic import BaseModel
+from dotenv import load_dotenv
 
-from token_management import save_token_info, load_token_info, is_token_valid
+from token_management import load_token_info, save_token_info
+
+load_dotenv()
 
 app = FastAPI()
 
@@ -65,7 +67,6 @@ async def callback(request: Request):
         "client_id": credentials.client_id,
         "client_secret": credentials.client_secret,
         "scopes": credentials.scopes,
-        "expires_at": (datetime.utcnow() + timedelta(days=1)).isoformat()
     }
     
     save_token_info(token_info)
@@ -75,7 +76,7 @@ async def callback(request: Request):
 
 @app.get("/get-playlist-videos")
 def get_playlist_videos(playlist_id: str):
-    token_info = load_token_info()
+    token_info = load_token_info() 
     if token_info is None or not is_token_valid(token_info):
         logging.warning("No valid token info available, authentication required")
         raise HTTPException(status_code=401, detail="Authentication required")
@@ -108,16 +109,23 @@ def get_playlist_videos(playlist_id: str):
 def refresh_access_token(token_info):
     credentials = Credentials(**token_info)
     if credentials.expired and credentials.refresh_token:
-        credentials.refresh(GoogleRequest())
-        new_token_info = {
-            "token": credentials.token,
-            "refresh_token": credentials.refresh_token,
-            "token_uri": credentials.token_uri,
-            "client_id": credentials.client_id,
-            "client_secret": credentials.client_secret,
-            "scopes": credentials.scopes,
-            "expires_at": (datetime.utcnow() + timedelta(days=1)).isoformat()
-        }
-        save_token_info(new_token_info)
-        return new_token_info
+        try:
+            credentials.refresh(GoogleRequest())
+            new_token_info = {
+                "token": credentials.token,
+                "refresh_token": credentials.refresh_token,
+                "token_uri": credentials.token_uri,
+                "client_id": credentials.client_id,
+                "client_secret": credentials.client_secret,
+                "scopes": credentials.scopes,
+            }
+            save_token_info(new_token_info)
+            return new_token_info
+        except Exception as e:
+            logging.error(f"Failed to refresh token: {e}")
+            raise HTTPException(status_code=500, detail="Failed to refresh token")
     return token_info
+
+def is_token_valid(token_info):
+    credentials = Credentials(**token_info)
+    return credentials and not credentials.expired
