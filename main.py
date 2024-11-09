@@ -26,7 +26,7 @@ CLIENT_SECRETS_INFO = {
         "token_uri": os.getenv("TOKEN_URI"),
         "auth_provider_x509_cert_url": os.getenv("AUTH_PROVIDER_X509_CERT_URL"),
         "client_secret": os.getenv("CLIENT_SECRET"),
-        "redirect_uris": [os.getenv("REDIRECT_URIS")]
+        "redirect_uris": [os.getenv("REDIRECT_URI")]
     }
 }
 
@@ -38,7 +38,7 @@ def login():
     flow = Flow.from_client_config(
         CLIENT_SECRETS_INFO,
         scopes=SCOPES,
-        redirect_uri=os.getenv("REDIRECT_URIS")
+        redirect_uri=os.getenv("REDIRECT_URI")
     )
     auth_url, _ = flow.authorization_url(prompt='consent')
     logging.info(f"Generated authentication URL: {auth_url}")
@@ -54,7 +54,7 @@ async def callback(request: Request):
     flow = Flow.from_client_config(
         CLIENT_SECRETS_INFO,
         scopes=SCOPES,
-        redirect_uri=os.getenv("REDIRECT_URIS")
+        redirect_uri=os.getenv("REDIRECT_URI")
     )
     
     flow.fetch_token(code=code)
@@ -74,8 +74,8 @@ async def callback(request: Request):
     
     return CallbackResponse(message="Authentication successful")
 
-@app.get("/get-playlist-videos")
-def get_playlist_videos(playlist_id: str):
+@app.get("/get-my-channel")
+def get_my_channel():
     token_info = load_token_info() 
     if token_info is None:
         logging.warning("No token info available, authentication required")
@@ -92,24 +92,20 @@ def get_playlist_videos(playlist_id: str):
         credentials = Credentials(**token_info)
         youtube = build("youtube", "v3", credentials=credentials)
 
-        request = youtube.playlistItems().list(
-            part="snippet",
-            playlistId=playlist_id,
-            maxResults=10
+        request = youtube.channels().list(
+            part="snippet,contentDetails,statistics",
+            mine=True  # This retrieves the authenticated user's channel
         )
         response = request.execute()
         
         if "error" in response:
             logging.error(f"API error: {response['error']}")
-            raise HTTPException(status_code=response['error'].get('code', 500), detail=response['error'].get('message', 'Error retrieving playlist videos'))
+            raise HTTPException(status_code=response['error'].get('code', 500), detail=response['error'].get('message', 'Error retrieving channel info'))
 
-        return {
-            "videos": response.get("items", []),
-            "totalResults": response.get("pageInfo", {}).get("totalResults", 0)
-        }
+        return response
     except Exception as e:
-        logging.error(f"Error retrieving playlist videos: {e}")
-        raise HTTPException(status_code=500, detail="Error retrieving playlist videos")
+        logging.error(f"Error retrieving channel info: {e}")
+        raise HTTPException(status_code=500, detail="Error retrieving channel info")
 
 def refresh_access_token(token_info):
     credentials = Credentials(**token_info)
