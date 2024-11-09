@@ -77,12 +77,17 @@ async def callback(request: Request):
 @app.get("/get-playlist-videos")
 def get_playlist_videos(playlist_id: str):
     token_info = load_token_info() 
-    if token_info is None or not is_token_valid(token_info):
-        logging.warning("No valid token info available, authentication required")
+    if token_info is None:
+        logging.warning("No token info available, authentication required")
         raise HTTPException(status_code=401, detail="Authentication required")
 
-    token_info = refresh_access_token(token_info)
-    
+    if not is_token_valid(token_info):
+        logging.warning("Token is invalid or expired, attempting to refresh")
+        token_info = refresh_access_token(token_info)
+        if token_info is None:
+            logging.warning("Failed to refresh token, authentication required")
+            raise HTTPException(status_code=401, detail="Authentication required")
+
     try:
         credentials = Credentials(**token_info)
         youtube = build("youtube", "v3", credentials=credentials)
@@ -120,6 +125,7 @@ def refresh_access_token(token_info):
                 "scopes": credentials.scopes,
             }
             save_token_info(new_token_info)
+            logging.info("Token refreshed successfully.")
             return new_token_info
         except Exception as e:
             logging.error(f"Failed to refresh token: {e}")
