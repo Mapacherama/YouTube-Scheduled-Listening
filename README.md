@@ -30,6 +30,7 @@ This project demonstrates how to integrate the YouTube Data API v3 with a FastAP
    TOKEN_URI=https://oauth2.googleapis.com/token
    AUTH_PROVIDER_X509_CERT_URL=https://www.googleapis.com/oauth2/v1/certs
    REDIRECT_URIS=your_redirect_uri
+   YOUTUBE_API_KEY=your_youtube_api_key  # Added for YouTube API access
    ```
 
 ## Usage
@@ -43,6 +44,11 @@ This project demonstrates how to integrate the YouTube Data API v3 with a FastAP
    ```
    GET /get-playlist-videos?playlist_id=your_playlist_id
    ```
+4. To schedule the opening of the first video in a playlist, use the following endpoint:
+   ```
+   POST /schedule-playlist/
+   ```
+   with a JSON body containing `playlist_id` and `start_time` (in HH:MM format).
 
 ## Token Management
 
