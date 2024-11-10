@@ -9,7 +9,7 @@ from googleapiclient.discovery import build
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-from token_management import load_token_info, save_token_info
+from token_management import load_token_info, save_token_info, refresh_access_token, is_token_valid
 
 load_dotenv()
 
@@ -62,7 +62,7 @@ async def callback(request: Request):
         credentials = flow.credentials
     except Exception as e:
         logging.error(f"Failed to fetch token: {e}")
-        raise HTTPException(status_code=500, detail="Failed to fetch token")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch token: {str(e)}")
 
     token_info = {
         "token": credentials.token,
@@ -77,29 +77,6 @@ async def callback(request: Request):
     logging.info("Authentication successful and token info saved")
     
     return CallbackResponse(message="Authentication successful")
-
-def refresh_access_token(token_info):
-    credentials = Credentials(**token_info)
-    if credentials.expired and credentials.refresh_token:
-        logging.info(f"Attempting to refresh token: {credentials.refresh_token}")
-        try:
-            credentials.refresh(GoogleRequest())
-            new_token_info = {
-                "token": credentials.token,
-                "refresh_token": credentials.refresh_token or token_info['refresh_token'],
-                "token_uri": credentials.token_uri,
-                "client_id": credentials.client_id,
-                "client_secret": credentials.client_secret,
-                "scopes": credentials.scopes,
-            }
-            save_token_info(new_token_info)
-            logging.info("Token refreshed successfully.")
-            return new_token_info
-        except Exception as e:
-            logging.error(f"Failed to refresh token: {e}")
-            raise HTTPException(status_code=500, detail="Failed to refresh token")
-    logging.warning("Token was not expired or no refresh token available.")
-    return token_info
 
 @app.get("/get-my-channel")
 def get_my_channel():
@@ -127,17 +104,3 @@ def get_my_channel():
     except Exception as e:
         logging.error(f"Error retrieving channel info: {e}")
         raise HTTPException(status_code=500, detail="Error retrieving channel info")
-
-def is_token_valid(token_info):
-    credentials = Credentials(**token_info)
-    if not credentials:
-        logging.warning("No credentials found.")
-        return False
-    if credentials.expired:
-        logging.info("Token is expired.")
-        return False
-    if not credentials.refresh_token:
-        logging.warning("No refresh token available.")
-        return False
-    logging.info("Token is valid.")
-    return True
