@@ -40,7 +40,7 @@ def login():
         scopes=SCOPES,
         redirect_uri=os.getenv("REDIRECT_URI")
     )
-    auth_url, _ = flow.authorization_url(prompt='consent')
+    auth_url, _ = flow.authorization_url(prompt='consent', access_type='offline')
     logging.info(f"Generated authentication URL: {auth_url}")
     return RedirectResponse(auth_url)
 
@@ -57,9 +57,13 @@ async def callback(request: Request):
         redirect_uri=os.getenv("REDIRECT_URI")
     )
     
-    flow.fetch_token(code=code)
-    credentials = flow.credentials
-    
+    try:
+        flow.fetch_token(code=code)
+        credentials = flow.credentials
+    except Exception as e:
+        logging.error(f"Failed to fetch token: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch token")
+
     token_info = {
         "token": credentials.token,
         "refresh_token": credentials.refresh_token,
@@ -74,47 +78,15 @@ async def callback(request: Request):
     
     return CallbackResponse(message="Authentication successful")
 
-@app.get("/get-my-channel")
-def get_my_channel():
-    token_info = load_token_info() 
-    if token_info is None:
-        logging.warning("No token info available, authentication required")
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    if not is_token_valid(token_info):
-        logging.warning("Token is invalid or expired, attempting to refresh")
-        token_info = refresh_access_token(token_info)
-        if token_info is None:
-            logging.warning("Failed to refresh token, authentication required")
-            raise HTTPException(status_code=401, detail="Authentication required")
-
-    try:
-        credentials = Credentials(**token_info)
-        youtube = build("youtube", "v3", credentials=credentials)
-
-        request = youtube.channels().list(
-            part="snippet,contentDetails,statistics",
-            mine=True  # This retrieves the authenticated user's channel
-        )
-        response = request.execute()
-        
-        if "error" in response:
-            logging.error(f"API error: {response['error']}")
-            raise HTTPException(status_code=response['error'].get('code', 500), detail=response['error'].get('message', 'Error retrieving channel info'))
-
-        return response
-    except Exception as e:
-        logging.error(f"Error retrieving channel info: {e}")
-        raise HTTPException(status_code=500, detail="Error retrieving channel info")
-
 def refresh_access_token(token_info):
     credentials = Credentials(**token_info)
     if credentials.expired and credentials.refresh_token:
+        logging.info(f"Attempting to refresh token: {credentials.refresh_token}")
         try:
             credentials.refresh(GoogleRequest())
             new_token_info = {
                 "token": credentials.token,
-                "refresh_token": credentials.refresh_token,
+                "refresh_token": credentials.refresh_token or token_info['refresh_token'],
                 "token_uri": credentials.token_uri,
                 "client_id": credentials.client_id,
                 "client_secret": credentials.client_secret,
@@ -126,8 +98,46 @@ def refresh_access_token(token_info):
         except Exception as e:
             logging.error(f"Failed to refresh token: {e}")
             raise HTTPException(status_code=500, detail="Failed to refresh token")
+    logging.warning("Token was not expired or no refresh token available.")
     return token_info
+
+@app.get("/get-my-channel")
+def get_my_channel():
+    token_info = load_token_info() 
+    if not token_info:
+        logging.warning("No token info available, authentication required.")
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    if not is_token_valid(token_info):
+        logging.info("Token invalid or expired, attempting refresh.")
+        token_info = refresh_access_token(token_info)
+        if not token_info:
+            logging.warning("Failed to refresh token, authentication required.")
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+    try:
+        credentials = Credentials(**token_info)
+        youtube = build("youtube", "v3", credentials=credentials)
+        request = youtube.channels().list(
+            part="snippet,contentDetails,statistics",
+            mine=True
+        )
+        response = request.execute()
+        return response
+    except Exception as e:
+        logging.error(f"Error retrieving channel info: {e}")
+        raise HTTPException(status_code=500, detail="Error retrieving channel info")
 
 def is_token_valid(token_info):
     credentials = Credentials(**token_info)
-    return credentials and not credentials.expired
+    if not credentials:
+        logging.warning("No credentials found.")
+        return False
+    if credentials.expired:
+        logging.info("Token is expired.")
+        return False
+    if not credentials.refresh_token:
+        logging.warning("No refresh token available.")
+        return False
+    logging.info("Token is valid.")
+    return True
