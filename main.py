@@ -3,7 +3,6 @@ import logging
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import RedirectResponse
 from google.oauth2.credentials import Credentials
-from google.auth.transport.requests import Request as GoogleRequest
 from google_auth_oauthlib.flow import InstalledAppFlow as Flow
 from googleapiclient.discovery import build
 from pydantic import BaseModel
@@ -60,22 +59,24 @@ async def callback(request: Request):
     try:
         flow.fetch_token(code=code)
         credentials = flow.credentials
+        logging.info(f"Fetched credentials: {credentials}")
+
+        token_info = {
+            "token": credentials.token,
+            "refresh_token": credentials.refresh_token,
+            "token_uri": credentials.token_uri,
+            "client_id": credentials.client_id,
+            "client_secret": credentials.client_secret,
+            "scopes": credentials.scopes,
+            "expires_at": credentials.expiry.isoformat()
+        }
+        
+        save_token_info(token_info)
+        logging.info(f"Token info saved: {token_info}")
     except Exception as e:
         logging.error(f"Failed to fetch token: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch token: {str(e)}")
 
-    token_info = {
-        "token": credentials.token,
-        "refresh_token": credentials.refresh_token,
-        "token_uri": credentials.token_uri,
-        "client_id": credentials.client_id,
-        "client_secret": credentials.client_secret,
-        "scopes": credentials.scopes,
-    }
-    
-    save_token_info(token_info)
-    logging.info("Authentication successful and token info saved")
-    
     return CallbackResponse(message="Authentication successful")
 
 @app.get("/get-my-channel")
