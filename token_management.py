@@ -57,9 +57,10 @@ def load_token_info():
 
 def is_token_valid(token_info):
     if 'expires_at' in token_info:
-        expires_at = datetime.fromisoformat(token_info['expires_at'])
-        logging.info(f"Checking if token is valid. Expires at: {expires_at}, Now: {datetime.now()}")
-        return expires_at > datetime.now(pytz.utc)
+        # Convert expires_at to an aware datetime
+        expires_at = datetime.fromisoformat(token_info['expires_at']).astimezone(pytz.utc)
+        logging.info(f"Checking if token is valid. Expires at: {expires_at}, Now: {datetime.now(pytz.utc)}")
+        return expires_at > datetime.now(pytz.utc)  # Compare with aware datetime
     return False
 
 def fetch_token(code):
