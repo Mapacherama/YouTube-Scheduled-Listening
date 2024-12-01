@@ -1,7 +1,6 @@
 import os
 import logging
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from fastapi import FastAPI
 from pyyoutube import Api
 from dotenv import load_dotenv
 import webbrowser
